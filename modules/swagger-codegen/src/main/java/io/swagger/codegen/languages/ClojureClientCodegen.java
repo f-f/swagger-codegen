@@ -1,21 +1,18 @@
 package io.swagger.codegen.languages;
 
-import io.swagger.codegen.CliOption;
-import io.swagger.codegen.CodegenConfig;
-import io.swagger.codegen.CodegenConstants;
-import io.swagger.codegen.CodegenOperation;
-import io.swagger.codegen.CodegenType;
-import io.swagger.codegen.DefaultCodegen;
-import io.swagger.codegen.SupportingFile;
+import io.swagger.codegen.*;
 import io.swagger.models.Contact;
 import io.swagger.models.Info;
 import io.swagger.models.License;
 import io.swagger.models.Swagger;
+import io.swagger.models.properties.*;
 import org.apache.commons.lang3.StringUtils;
 
 import java.io.File;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.List;
+import java.util.Set;
 
 public class ClojureClientCodegen extends DefaultCodegen implements CodegenConfig {
     private static final String PROJECT_NAME = "projectName";
@@ -32,6 +29,7 @@ public class ClojureClientCodegen extends DefaultCodegen implements CodegenConfi
     protected String baseNamespace;
 
     protected String sourceFolder = "src";
+    protected String modulePath = null;
 
     public ClojureClientCodegen() {
         super();
@@ -42,7 +40,7 @@ public class ClojureClientCodegen extends DefaultCodegen implements CodegenConfi
         cliOptions.add(new CliOption(PROJECT_NAME,
                 "name of the project (Default: generated from info.title or \"swagger-clj-client\")"));
         cliOptions.add(new CliOption(PROJECT_DESCRIPTION,
-                "description of the project (Default: using info.description or \"Client library of <projectNname>\")"));
+                "description of the project (Default: using info.description or \"Client library of <projectName>\")"));
         cliOptions.add(new CliOption(PROJECT_VERSION,
                 "version of the project (Default: using info.version or \"1.0.0\")"));
         cliOptions.add(new CliOption(PROJECT_URL,
@@ -53,6 +51,21 @@ public class ClojureClientCodegen extends DefaultCodegen implements CodegenConfi
                 "URL of the license the project uses (Default: using info.license.url or not included in project.clj)"));
         cliOptions.add(new CliOption(BASE_NAMESPACE,
                 "the base/top namespace (Default: generated from projectName)"));
+
+        typeMapping.clear();
+        typeMapping.put("integer", "int?");
+        typeMapping.put("float", "float?");
+        typeMapping.put("number", "float?");
+        typeMapping.put("long", "int?");
+        typeMapping.put("double", "float?");
+        typeMapping.put("array", "list?");
+        typeMapping.put("map", "map?");
+        typeMapping.put("boolean", "boolean?");
+        typeMapping.put("string", "string?");
+        typeMapping.put("date", "inst?");
+        typeMapping.put("DateTime", "inst?");
+        typeMapping.put("UUID", "uuid?");
+        // TODO: some type mappings are missing
     }
 
     @Override
@@ -68,6 +81,45 @@ public class ClojureClientCodegen extends DefaultCodegen implements CodegenConfi
     @Override
     public String getHelp() {
         return "Generates a Clojure client library.";
+    }
+
+    @Override
+    public String getTypeDeclaration(Property p) {
+        if (p instanceof ArrayProperty) {
+            ArrayProperty ap = (ArrayProperty) p;
+            Property inner = ap.getItems();
+            return "(s/coll-of " + getTypeDeclaration(inner) + ")";
+        } else if (p instanceof MapProperty) {
+            MapProperty mp = (MapProperty) p;
+            Property inner = mp.getAdditionalProperties();
+            return "(s/map-of string? " + getTypeDeclaration(inner) + ")";
+        }
+        return super.getTypeDeclaration(p);
+    }
+
+    @Override
+    public String getSwaggerType(Property p) {
+        String swaggerType = super.getSwaggerType(p);
+
+        if (typeMapping.containsKey(swaggerType)) {
+            return typeMapping.get(swaggerType);
+        } else if (swaggerType == "object") {
+            return "A.Value"; // TODO
+        } else {
+            return toModelName(swaggerType) + "-spec";
+        }
+    }
+
+    @Override
+    public String toModelName(String name) {
+        return dashize(name);
+    }
+
+    @Override
+    public String toVarName(String name) {
+        name = name.replaceAll("[^a-zA-Z0-9_-]+", ""); // FIXME: a parameter should not be assigned. Also declare the methods parameters as 'final'.
+        name = dashize(name);
+        return name;
     }
 
     @Override
@@ -143,6 +195,7 @@ public class ClojureClientCodegen extends DefaultCodegen implements CodegenConfi
         final String baseNamespaceFolder = sourceFolder + File.separator + namespaceToFolder(baseNamespace);
         supportingFiles.add(new SupportingFile("project.mustache", "", "project.clj"));
         supportingFiles.add(new SupportingFile("core.mustache", baseNamespaceFolder, "core.clj"));
+        supportingFiles.add(new SupportingFile( "specs.mustache", baseNamespaceFolder, "specs.clj"));
         supportingFiles.add(new SupportingFile("git_push.sh.mustache", "", "git_push.sh"));
         supportingFiles.add(new SupportingFile("gitignore.mustache", "", ".gitignore"));
     }
@@ -180,13 +233,6 @@ public class ClojureClientCodegen extends DefaultCodegen implements CodegenConfi
     @Override
     public String toParamName(String name) {
         return toVarName(name);
-    }
-
-    @Override
-    public String toVarName(String name) {
-        name = name.replaceAll("[^a-zA-Z0-9_-]+", ""); // FIXME: a parameter should not be assigned. Also declare the methods parameters as 'final'.
-        name = dashize(name);
-        return name;
     }
 
     @Override
