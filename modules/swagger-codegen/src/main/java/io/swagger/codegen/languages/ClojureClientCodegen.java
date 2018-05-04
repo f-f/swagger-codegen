@@ -53,19 +53,31 @@ public class ClojureClientCodegen extends DefaultCodegen implements CodegenConfi
                 "the base/top namespace (Default: generated from projectName)"));
 
         typeMapping.clear();
+
+        // We have specs for most of the types:
         typeMapping.put("integer", "int?");
-        typeMapping.put("float", "float?");
-        typeMapping.put("number", "float?");
         typeMapping.put("long", "int?");
+        typeMapping.put("short", "int?");
+        typeMapping.put("number", "float?");
+        typeMapping.put("float", "float?");
         typeMapping.put("double", "float?");
         typeMapping.put("array", "list?");
         typeMapping.put("map", "map?");
         typeMapping.put("boolean", "boolean?");
         typeMapping.put("string", "string?");
+        typeMapping.put("char", "char?");
         typeMapping.put("date", "inst?");
         typeMapping.put("DateTime", "inst?");
         typeMapping.put("UUID", "uuid?");
-        // TODO: some type mappings are missing
+
+        // But some type mappings are not really worth/meaningful to check for:
+        typeMapping.put("object", "any?"); // Like, everything is an object.
+        typeMapping.put("file", "any?");   // We don't really have specs for files,
+        typeMapping.put("binary", "any?"); // nor binary.
+        // And while there is a way to easily check if something is a bytearray,
+        // (https://stackoverflow.com/questions/14796964/), it's not possible
+        // to conform it yet, so we leave it as is.
+        typeMapping.put("ByteArray", "any?");
     }
 
     @Override
